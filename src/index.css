@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: #ffffff;
+    color: #000000;
+  }
+
+  .font-display {
+    font-family: 'Syne', system-ui, sans-serif;
+  }
+
+  .dark body {
+    background: #0c0c0c;
+    color: #f0f0f0;
+  }
+}
+
+/* Member circle patterns */
+.pattern-solid {}
+
+.pattern-dots {
+  background-image: radial-gradient(circle, rgba(0,0,0,0.25) 1.5px, transparent 1.5px);
+  background-size: 5px 5px;
+}
+
+.pattern-stripes {
+  background-image: repeating-linear-gradient(
+    45deg, transparent, transparent 2px,
+    rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 4px
+  );
+}
+
+.pattern-grid {
+  background-image:
+    linear-gradient(rgba(0,0,0,0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.18) 1px, transparent 1px);
+  background-size: 5px 5px;
+}

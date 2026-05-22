@@ -1,0 +1,173 @@
+import { useState, useEffect } from 'react'
+import { X } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { theme } from '../lib/theme'
+import MemberSelector from './MemberSelector'
+
+export default function DeckModal({ deck, members: initialMembers, dark, onClose, onSaved }) {
+  const c = theme(dark)
+
+  const [clientName, setClientName] = useState(deck?.client_name || '')
+  const [slug, setSlug] = useState(deck?.slug || '')
+  const [deckUrl, setDeckUrl] = useState(deck?.deck_url || '')
+  const [selected, setSelected] = useState([])
+  const [members, setMembers] = useState(initialMembers || [])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (deck) {
+      const pre = []
+      if (deck.member_one) pre.push(deck.member_one)
+      if (deck.member_two) pre.push(deck.member_two)
+      setSelected(pre)
+    }
+  }, [deck])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    const payload = {
+      client_name: clientName.trim(),
+      slug: slug.trim().toUpperCase(),
+      deck_url: deckUrl.trim(),
+      member_one_id: selected[0]?.id || null,
+      member_two_id: selected[1]?.id || null,
+    }
+    const q = `*, member_one:member_one_id(*), member_two:member_two_id(*)`
+    const result = deck?.id
+      ? await supabase.from('decks').update(payload).eq('id', deck.id).select(q).single()
+      : await supabase.from('decks').insert(payload).select(q).single()
+    setLoading(false)
+    if (result.error) { setError(result.error.message); return }
+    onSaved(result.data)
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={onClose} />
+      <div className="relative w-full max-w-md" style={{
+        background: c.bg,
+        border: `1px solid ${c.border}`,
+        boxShadow: '0 24px 64px rgba(0,0,0,0.18)',
+      }}>
+
+        {/* Accent rule at top */}
+        <div style={{ height: 3, background: c.accent }} />
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${c.borderLight}` }}>
+          <h2 className="font-display text-base font-bold tracking-tight" style={{ color: c.text }}>
+            {deck ? 'Edit deck' : 'Add deck'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1 transition-colors"
+            style={{ color: c.faint }}
+            onMouseEnter={e => e.currentTarget.style.color = c.text}
+            onMouseLeave={e => e.currentTarget.style.color = c.faint}
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+          <Field label="Client name" c={c}>
+            <FocusInput type="text" value={clientName} onChange={e => setClientName(e.target.value)} required placeholder="Bangkok Condo Co." c={c} />
+          </Field>
+
+          <Field label="Slug" c={c} hint="Uppercase letters, numbers, hyphens only">
+            <SlugInput value={slug} onChange={e => setSlug(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))} c={c} />
+          </Field>
+
+          <Field label="Deck URL" c={c}>
+            <FocusInput type="url" value={deckUrl} onChange={e => setDeckUrl(e.target.value)} required placeholder="https://pitch.com/…" c={c} />
+          </Field>
+
+          <Field label="Crafted by" c={c}>
+            <MemberSelector members={members} selected={selected} onChange={setSelected} onMembersChange={setMembers} dark={dark} />
+          </Field>
+
+          {error && (
+            <p className="text-xs px-3 py-2" style={{ background: '#fef2f2', color: '#dc2626', borderLeft: '3px solid #dc2626' }}>{error}</p>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2 text-xs font-medium transition-colors"
+              style={{ border: `1px solid ${c.borderLight}`, color: c.muted, background: 'transparent' }}
+              onMouseEnter={e => e.currentTarget.style.background = c.hoverBg}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >Cancel</button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 py-2 text-xs font-semibold transition-opacity disabled:opacity-50"
+              style={{ background: c.text, color: c.bg }}
+            >{loading ? 'Saving…' : deck ? 'Save changes' : 'Add deck'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, c, hint, children }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium mb-1.5 uppercase" style={{ color: c.muted, letterSpacing: '0.06em' }}>{label}</label>
+      {children}
+      {hint && <p className="text-xs mt-1" style={{ color: c.faint }}>{hint}</p>}
+    </div>
+  )
+}
+
+function FocusInput({ c, ...props }) {
+  const [focused, setFocused] = useState(false)
+  return (
+    <input
+      {...props}
+      className="w-full px-3 py-2 text-sm outline-none transition-all"
+      style={{
+        background: c.inputBg,
+        border: `1px solid ${focused ? c.accent : c.inputBorder}`,
+        color: c.text,
+        fontFamily: 'inherit',
+        boxShadow: focused ? `0 0 0 3px ${c.accent}22` : 'none',
+      }}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+    />
+  )
+}
+
+function SlugInput({ value, onChange, c }) {
+  const [focused, setFocused] = useState(false)
+  return (
+    <div className="flex items-center overflow-hidden" style={{
+      border: `1px solid ${focused ? c.accent : c.inputBorder}`,
+      boxShadow: focused ? `0 0 0 3px ${c.accent}22` : 'none',
+      transition: 'box-shadow 0.15s',
+    }}>
+      <span className="px-3 py-2 text-sm select-none flex-shrink-0" style={{ background: c.surface, color: c.faint, borderRight: `1px solid ${c.borderLight}`, fontFamily: 'monospace' }}>
+        /view/
+      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={onChange}
+        required
+        placeholder="BCC"
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        className="flex-1 px-3 py-2 text-sm outline-none"
+        style={{ background: c.inputBg, color: c.text, fontFamily: 'monospace' }}
+      />
+    </div>
+  )
+}
