@@ -167,7 +167,6 @@ export default function Dashboard() {
                 dark={dark}
                 onEdit={() => setEditDeck(deck)}
                 onDelete={() => setDeleteDeck(deck)}
-                onMemberClick={m => setEditMember(m)}
               />
             ))}
           </div>
