@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, LogOut, Sun, Moon } from 'lucide-react'
+import { Plus, LogOut, Sun, Moon, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 import { theme } from '../lib/theme'
@@ -8,6 +8,8 @@ import DeckModal from '../components/DeckModal'
 import DeleteDialog from '../components/DeleteDialog'
 import LogoutDialog from '../components/LogoutDialog'
 import EditMemberModal from '../components/EditMemberModal'
+import ManageMembersModal from '../components/ManageMembersModal'
+import DeleteMemberDialog from '../components/DeleteMemberDialog'
 
 export default function Dashboard() {
   const { dark, setDark } = useTheme()
@@ -21,6 +23,9 @@ export default function Dashboard() {
   const [deleteDeck, setDeleteDeck] = useState(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [editMember, setEditMember] = useState(null)
+  const [showMembers, setShowMembers] = useState(false)
+  const [deleteMember, setDeleteMember] = useState(null)
+  const [deleteMemberLoading, setDeleteMemberLoading] = useState(false)
   const [showLogout, setShowLogout] = useState(false)
 
   useEffect(() => { fetchAll() }, [])
@@ -62,6 +67,31 @@ export default function Dashboard() {
     setMembers(prev => prev.map(m => m.id === updated.id ? updated : m))
   }
 
+  function handleMemberCreated(created) {
+    setMembers(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+  }
+
+  const affectedDecks = deleteMember ? decks.filter(d => d.member_ids?.includes(deleteMember.id)) : []
+
+  async function handleDeleteMember() {
+    if (!deleteMember) return
+    setDeleteMemberLoading(true)
+
+    await Promise.all(affectedDecks.map(d =>
+      supabase.from('decks').update({ member_ids: d.member_ids.filter(id => id !== deleteMember.id) }).eq('id', d.id)
+    ))
+    await supabase.from('members').delete().eq('id', deleteMember.id)
+
+    setDecks(prev => prev.map(d =>
+      affectedDecks.find(ad => ad.id === d.id)
+        ? { ...d, member_ids: d.member_ids.filter(id => id !== deleteMember.id) }
+        : d
+    ))
+    setMembers(prev => prev.filter(m => m.id !== deleteMember.id))
+    setDeleteMemberLoading(false)
+    setDeleteMember(null)
+  }
+
   return (
     <div className="min-h-screen" style={{ background: c.bg }}>
 
@@ -77,6 +107,9 @@ export default function Dashboard() {
                 <ThemeTab active={!dark} onClick={() => setDark(false)} c={c} title="Light mode"><Sun size={12} /></ThemeTab>
                 <ThemeTab active={dark}  onClick={() => setDark(true)}  c={c} title="Dark mode"><Moon size={12} /></ThemeTab>
               </div>
+              <IconBtn onClick={() => setShowMembers(true)} c={c} title="Manage members">
+                <Users size={15} />
+              </IconBtn>
               <IconBtn onClick={() => setShowLogout(true)} c={c} title="Sign out">
                 <LogOut size={15} />
               </IconBtn>
@@ -144,7 +177,27 @@ export default function Dashboard() {
       {showAdd    && <DeckModal members={members} onClose={() => setShowAdd(false)} onSaved={handleDeckSaved} dark={dark} />}
       {editDeck   && <DeckModal deck={editDeck} members={members} onClose={() => setEditDeck(null)} onSaved={handleDeckSaved} dark={dark} />}
       {deleteDeck && <DeleteDialog deckName={deleteDeck.client_name} loading={deleteLoading} onConfirm={handleDelete} onCancel={() => setDeleteDeck(null)} dark={dark} />}
+      {showMembers && (
+        <ManageMembersModal
+          members={members}
+          onClose={() => setShowMembers(false)}
+          onEdit={m => setEditMember(m)}
+          onDelete={m => setDeleteMember(m)}
+          onCreated={handleMemberCreated}
+          dark={dark}
+        />
+      )}
       {editMember && <EditMemberModal member={editMember} onClose={() => setEditMember(null)} onSaved={handleMemberUpdated} dark={dark} />}
+      {deleteMember && (
+        <DeleteMemberDialog
+          memberName={deleteMember.name}
+          deckCount={affectedDecks.length}
+          loading={deleteMemberLoading}
+          onConfirm={handleDeleteMember}
+          onCancel={() => setDeleteMember(null)}
+          dark={dark}
+        />
+      )}
       {showLogout && <LogoutDialog onConfirm={handleLogout} onCancel={() => setShowLogout(false)} dark={dark} />}
     </div>
   )

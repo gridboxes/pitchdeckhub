@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Plus, X, ChevronDown } from 'lucide-react'
+import { Plus, X, ChevronDown, ArrowLeft } from 'lucide-react'
 import { theme } from '../lib/theme'
 import MemberCircle from './MemberCircle'
 import MemberForm from './MemberForm'
@@ -9,10 +9,19 @@ export default function MemberSelector({ members, selected, onChange, onMembersC
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const ref = useRef(null)
+  const panelRef = useRef(null)
+
+  useEffect(() => {
+    if (creating && panelRef.current) {
+      const scroller = panelRef.current.closest('.overflow-y-auto')
+      if (scroller) scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' })
+      else panelRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [creating])
 
   useEffect(() => {
     function handle(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+      if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setCreating(false) }
     }
     document.addEventListener('mousedown', handle)
     return () => document.removeEventListener('mousedown', handle)
@@ -52,7 +61,7 @@ export default function MemberSelector({ members, selected, onChange, onMembersC
 
         <button
             type="button"
-            onClick={() => setOpen(o => !o)}
+            onClick={() => { setOpen(o => !o); setCreating(false) }}
             className="flex items-center gap-1 px-2 py-1 text-xs font-medium transition-colors"
             style={{
               border: `1px solid ${open ? c.border : c.borderLight}`,
@@ -68,11 +77,25 @@ export default function MemberSelector({ members, selected, onChange, onMembersC
 
       {/* Dropdown */}
       {open && (
-        <div style={{ border: `1px solid ${c.border}`, background: c.bg }}>
+        <div ref={panelRef} style={{ border: `1px solid ${c.border}`, background: c.bg }}>
           {creating ? (
-            <div className="p-4">
-              <p className="text-xs font-medium mb-3 uppercase" style={{ color: c.muted, letterSpacing: '0.06em' }}>New profile</p>
-              <MemberForm dark={dark} onSave={handleNewMember} onCancel={() => setCreating(false)} />
+            <div>
+              <div className="flex items-center gap-2 px-3 py-2.5" style={{ borderBottom: `1px solid ${c.borderLight}` }}>
+                <button
+                  type="button"
+                  onClick={() => setCreating(false)}
+                  className="p-0.5 -ml-0.5 transition-colors"
+                  style={{ color: c.faint }}
+                  onMouseEnter={e => e.currentTarget.style.color = c.text}
+                  onMouseLeave={e => e.currentTarget.style.color = c.faint}
+                >
+                  <ArrowLeft size={14} />
+                </button>
+                <span className="text-xs font-medium" style={{ color: c.text }}>New profile</span>
+              </div>
+              <div className="p-4">
+                <MemberForm dark={dark} onSave={handleNewMember} onCancel={() => setCreating(false)} />
+              </div>
             </div>
           ) : (
             <>

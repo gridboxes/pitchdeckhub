@@ -9,11 +9,22 @@ function formatDate(ts) {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 }
 
-function screenshotUrl(url) {
+function screenshotUrl(url, cacheKey) {
   // Use the canonical s0.wp.com host directly. s0.wordpress.com 301-redirects here,
   // and that redirect drops CORS headers — which breaks the crossOrigin probe we use
   // to detect the "Generating Preview…" placeholder.
-  try { new URL(url); return `https://s0.wp.com/mshots/v1/${encodeURIComponent(url)}?w=800&h=450` }
+  try {
+    const u = new URL(url)
+    if (cacheKey) {
+      // mshots caches by the exact URL string. If it ever captured this URL while
+      // it was returning an error (e.g. a fresh Vercel deploy still 404ing), it'll
+      // keep serving that stale screenshot indefinitely. Tagging the URL with a
+      // stable per-deck key gives mshots a "new" URL to crawl fresh — the live
+      // site ignores the unknown param and renders the same page either way.
+      u.searchParams.set('_mshot', cacheKey)
+    }
+    return `https://s0.wp.com/mshots/v1/${encodeURIComponent(u.toString())}?w=800&h=450`
+  }
   catch { return null }
 }
 
@@ -35,7 +46,7 @@ export default function DeckCard({ deck, members: allMembers = [], dark, onEdit,
 
   const viewUrl = `${BASE_URL}/view/${deck.slug}`
   const members = (deck.member_ids || []).map(id => allMembers.find(m => m.id === id)).filter(Boolean)
-  const thumb = screenshotUrl(deck.deck_url)
+  const thumb = screenshotUrl(deck.deck_url, deck.id)
   const fallback = hashGradient(deck.deck_url)
   const gradientStyle = { background: `linear-gradient(135deg, ${fallback.a}, ${fallback.b})` }
 

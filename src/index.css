@@ -65,6 +65,43 @@
 .color-slider::-webkit-slider-runnable-track { background: transparent; }
 .color-slider::-moz-range-track { background: transparent; }
 
+/* Graininess slider — vertical "pill" thumb riding a squiggle track */
+.grain-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+  height: 50px;
+  margin: 0;
+  position: relative;
+  z-index: 2;
+}
+.grain-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 44px;
+  border-radius: 13px;
+  background: #ffffff;
+  cursor: grab;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.22);
+  border: none;
+  transition: transform 0.12s;
+}
+.grain-slider::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.04); }
+.grain-slider::-moz-range-thumb {
+  width: 26px;
+  height: 44px;
+  border-radius: 13px;
+  background: #ffffff;
+  cursor: grab;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.22);
+  border: none;
+}
+.grain-slider::-webkit-slider-runnable-track { background: transparent; }
+.grain-slider::-moz-range-track { background: transparent; }
+
 /* Member circle patterns */
 
 .pattern-solid {}
