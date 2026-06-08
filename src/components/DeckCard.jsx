@@ -10,7 +10,10 @@ function formatDate(ts) {
 }
 
 function screenshotUrl(url) {
-  try { new URL(url); return `https://s0.wordpress.com/mshots/v1/${encodeURIComponent(url)}?w=800&h=450` }
+  // Use the canonical s0.wp.com host directly. s0.wordpress.com 301-redirects here,
+  // and that redirect drops CORS headers — which breaks the crossOrigin probe we use
+  // to detect the "Generating Preview…" placeholder.
+  try { new URL(url); return `https://s0.wp.com/mshots/v1/${encodeURIComponent(url)}?w=800&h=450` }
   catch { return null }
 }
 
@@ -45,15 +48,59 @@ export default function DeckCard({ deck, members: allMembers = [], dark, onEdit,
     if (!thumb) { setThumbState('gradient'); return }
     let alive = true
 
+    const MAX_ATTEMPTS = 12          // mShots usually finishes within ~30s
+    const urlFor = a => (a > 0 ? `${thumb}&r=${a}` : thumb)
+    // Faster polling early (mShots is often ready in 5–15s), easing out after.
+    const delayFor = a => Math.min(2000 + a * 1500, 10000)
+
     function showImage(src) {
       if (!alive) return
       setImgSrc(src)
       setThumbState('ready')
     }
 
+    // Classify a loaded image: WordPress's "Generating Preview…" placeholder is a
+    // flat, near-greyscale tile. Detect it by colour + uniformity, not darkness
+    // alone (the grey varies in brightness across mShots versions).
+    // → 'placeholder' (retry) | 'ready' (real screenshot) | 'unknown' (can't read pixels)
+    function classify(img) {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 8; canvas.height = 8
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, 8, 8) // whole image, downscaled
+        const d = ctx.getImageData(0, 0, 8, 8).data
+
+        const lums = []
+        let sum = 0, maxChroma = 0
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i], g = d[i + 1], b = d[i + 2]
+          const lum = (r + g + b) / 3
+          lums.push(lum); sum += lum
+          const chroma = Math.max(r, g, b) - Math.min(r, g, b)
+          if (chroma > maxChroma) maxChroma = chroma
+        }
+        const mean = sum / lums.length
+        const std = Math.sqrt(lums.reduce((s, v) => s + (v - mean) ** 2, 0) / lums.length)
+
+        // Placeholder = dim + (near-)greyscale + visually uniform.
+        // Real screenshots have colour (chroma) or contrast (std) or are bright.
+        if (mean < 110 && maxChroma < 28 && std < 42) return 'placeholder'
+        return 'ready'
+      } catch {
+        return 'unknown' // canvas tainted (no CORS) — can't inspect pixels
+      }
+    }
+
+    function scheduleRetry(next) {
+      if (next > MAX_ATTEMPTS) { setThumbState('gradient'); return }
+      probeRef.current = setTimeout(() => probe(next), delayFor(next))
+    }
+
     function probe(attempt = 0) {
       const img = new Image()
       img.crossOrigin = 'anonymous'
+      const url = urlFor(attempt)
       let settled = false
 
       function settle(fn) {
@@ -63,47 +110,31 @@ export default function DeckCard({ deck, members: allMembers = [], dark, onEdit,
         fn()
       }
 
-      // Hard timeout — if the network hangs (e.g. sandbox), don't shimmer forever
-      probeRef.current = setTimeout(() => settle(() => showImage(thumb)), 5000)
+      // Per-attempt hard timeout so a hung request doesn't stall the poll loop.
+      probeRef.current = setTimeout(() => settle(() => scheduleRetry(attempt + 1)), 8000)
 
       img.onload = () => settle(() => {
-        try {
-          // Sample the centre 40% of the image into a 4×4 canvas
-          const canvas = document.createElement('canvas')
-          canvas.width = 4; canvas.height = 4
-          const ctx = canvas.getContext('2d')
-          const { naturalWidth: w, naturalHeight: h } = img
-          ctx.drawImage(img, w * 0.3, h * 0.3, w * 0.4, h * 0.4, 0, 0, 4, 4)
-          const d = ctx.getImageData(0, 0, 4, 4).data
-          let brightness = 0
-          for (let i = 0; i < d.length; i += 4) brightness += (d[i] + d[i + 1] + d[i + 2]) / 3
-          brightness /= 16
-
-          if (brightness < 60) {
-            // Near-black → WordPress "Generating Preview…" placeholder; retry
-            if (attempt < 8) {
-              const delay = Math.min(5000 * (attempt + 1), 20000)
-              probeRef.current = setTimeout(() => probe(attempt + 1), delay)
-            } else {
-              setThumbState('gradient') // gave up after max retries
-            }
-          } else {
-            // Real screenshot confirmed
-            showImage(attempt > 0 ? `${thumb}&_=${attempt}` : thumb)
-          }
-        } catch {
-          // canvas.getImageData blocked (CDN doesn't return CORS headers) —
-          // can't verify pixels, just show the image
-          showImage(thumb)
+        const verdict = classify(img)
+        if (verdict === 'ready') {
+          showImage(url)
+        } else if (verdict === 'placeholder') {
+          scheduleRetry(attempt + 1)
+        } else {
+          // Pixels unreadable: show what we have so the card isn't blank, but
+          // keep polling so a placeholder still self-heals to the real shot.
+          showImage(url)
+          scheduleRetry(attempt + 1)
         }
       })
 
       img.onerror = () => settle(() => {
-        // CORS denied immediately — server doesn't support it; show image directly
-        showImage(thumb)
+        // CORS/network hiccup: can't inspect. Show it (plain <img> has no
+        // crossOrigin) and keep polling so it doesn't stay stuck on a placeholder.
+        showImage(url)
+        scheduleRetry(attempt + 1)
       })
 
-      img.src = attempt > 0 ? `${thumb}&_=${attempt}` : thumb
+      img.src = url
     }
 
     setThumbState('probing')
@@ -237,6 +268,9 @@ function ThumbImage({ src, alt, onFail }) {
     <>
       {!loaded && <div className="thumb-shimmer absolute inset-0" />}
       <img
+        // Match the probe's crossOrigin so this shares its cache entry and
+        // renders instantly instead of re-downloading the screenshot.
+        crossOrigin="anonymous"
         src={src}
         alt={alt}
         onLoad={() => setLoaded(true)}
