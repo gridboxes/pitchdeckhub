@@ -18,7 +18,7 @@ function AppRoutes() {
     <div className="min-h-screen flex items-center justify-center">
       <div
         className="h-5 w-5 animate-spin rounded-full border-2 border-t-transparent"
-        style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}
+        style={{ borderColor: '#F6C347', borderTopColor: 'transparent' }}
       />
     </div>
   )

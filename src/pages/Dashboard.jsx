@@ -1,23 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Plus, Sun, Moon, LogOut, Image, Layers } from 'lucide-react'
+import { Plus, LogOut, Sun, Moon } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
 import { theme } from '../lib/theme'
 import DeckCard from '../components/DeckCard'
 import DeckModal from '../components/DeckModal'
 import DeleteDialog from '../components/DeleteDialog'
+import LogoutDialog from '../components/LogoutDialog'
 import EditMemberModal from '../components/EditMemberModal'
 
 export default function Dashboard() {
   const { dark, setDark } = useTheme()
   const c = theme(dark)
-
-  const [cardView, setCardView] = useState(() => localStorage.getItem('cardView') || 'thumbnail')
-
-  function toggleView(v) {
-    setCardView(v)
-    localStorage.setItem('cardView', v)
-  }
 
   const [decks, setDecks] = useState([])
   const [members, setMembers] = useState([])
@@ -27,13 +21,14 @@ export default function Dashboard() {
   const [deleteDeck, setDeleteDeck] = useState(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [editMember, setEditMember] = useState(null)
+  const [showLogout, setShowLogout] = useState(false)
 
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
     setLoadingDecks(true)
     const [deckRes, memberRes] = await Promise.all([
-      supabase.from('decks').select('*, member_one:member_one_id(*), member_two:member_two_id(*)').order('date_added', { ascending: false }),
+      supabase.from('decks').select('*').order('date_added', { ascending: false }),
       supabase.from('members').select('*').order('name'),
     ])
     if (deckRes.data) setDecks(deckRes.data)
@@ -41,7 +36,10 @@ export default function Dashboard() {
     setLoadingDecks(false)
   }
 
-  async function handleLogout() { await supabase.auth.signOut() }
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    setShowLogout(false)
+  }
 
   function handleDeckSaved(saved) {
     setDecks(prev => {
@@ -61,11 +59,6 @@ export default function Dashboard() {
   }
 
   function handleMemberUpdated(updated) {
-    setDecks(prev => prev.map(deck => ({
-      ...deck,
-      member_one: deck.member_one?.id === updated.id ? updated : deck.member_one,
-      member_two: deck.member_two?.id === updated.id ? updated : deck.member_two,
-    })))
     setMembers(prev => prev.map(m => m.id === updated.id ? updated : m))
   }
 
@@ -79,21 +72,12 @@ export default function Dashboard() {
             Mtel Pitch
           </span>
           <div className="flex items-center gap-3">
-            {/* View toggle */}
-            <div className="flex items-center rounded-lg p-0.5" style={{ background: c.surface, border: `1px solid ${c.border}` }}>
-              <ViewBtn active={cardView === 'thumbnail'} onClick={() => toggleView('thumbnail')} c={c} title="Thumbnail view">
-                <Image size={13} />
-              </ViewBtn>
-              <ViewBtn active={cardView === 'gradient'} onClick={() => toggleView('gradient')} c={c} title="Gradient view">
-                <Layers size={13} />
-              </ViewBtn>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <IconBtn onClick={() => setDark(d => !d)} c={c} title={dark ? 'Light mode' : 'Dark mode'}>
-                {dark ? <Sun size={15} /> : <Moon size={15} />}
-              </IconBtn>
-              <IconBtn onClick={handleLogout} c={c} title="Sign out">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center p-0.5" style={{ background: c.surface, border: `1px solid ${c.borderLight}` }}>
+                <ThemeTab active={!dark} onClick={() => setDark(false)} c={c} title="Light mode"><Sun size={12} /></ThemeTab>
+                <ThemeTab active={dark}  onClick={() => setDark(true)}  c={c} title="Dark mode"><Moon size={12} /></ThemeTab>
+              </div>
+              <IconBtn onClick={() => setShowLogout(true)} c={c} title="Sign out">
                 <LogOut size={15} />
               </IconBtn>
             </div>
@@ -123,8 +107,8 @@ export default function Dashboard() {
 
         {loadingDecks ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-44 animate-pulse" style={{ background: c.surface, border: `1px solid ${c.borderLight}` }} />
+            {[...Array(6)].map((_, i) => (
+              <DeckCardSkeleton key={i} dark={dark} delay={`${i * 80}ms`} />
             ))}
           </div>
         ) : decks.length === 0 ? (
@@ -146,8 +130,8 @@ export default function Dashboard() {
               <DeckCard
                 key={deck.id}
                 deck={deck}
+                members={members}
                 dark={dark}
-                cardView={cardView}
                 onEdit={() => setEditDeck(deck)}
                 onDelete={() => setDeleteDeck(deck)}
                 onMemberClick={m => setEditMember(m)}
@@ -161,6 +145,7 @@ export default function Dashboard() {
       {editDeck   && <DeckModal deck={editDeck} members={members} onClose={() => setEditDeck(null)} onSaved={handleDeckSaved} dark={dark} />}
       {deleteDeck && <DeleteDialog deckName={deleteDeck.client_name} loading={deleteLoading} onConfirm={handleDelete} onCancel={() => setDeleteDeck(null)} dark={dark} />}
       {editMember && <EditMemberModal member={editMember} onClose={() => setEditMember(null)} onSaved={handleMemberUpdated} dark={dark} />}
+      {showLogout && <LogoutDialog onConfirm={handleLogout} onCancel={() => setShowLogout(false)} dark={dark} />}
     </div>
   )
 }
@@ -181,19 +166,53 @@ function IconBtn({ children, onClick, c, title }) {
   )
 }
 
-function ViewBtn({ children, active, onClick, c, title }) {
+function ThemeTab({ children, active, onClick, c, title }) {
   return (
     <button
       onClick={onClick}
       title={title}
-      className="p-1.5 rounded-md transition-all"
+      className="p-1.5 transition-all"
       style={{
         color: active ? c.text : c.muted,
         background: active ? c.bg : 'transparent',
-        boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+        borderBottom: '2px solid transparent',
       }}
     >
       {children}
     </button>
   )
 }
+
+function DeckCardSkeleton({ dark, delay = '0ms' }) {
+  const c = theme(dark)
+  const fill = { background: dark ? '#252525' : '#ebebeb' }
+  return (
+    <div
+      className="flex flex-col overflow-hidden animate-pulse"
+      style={{ background: c.card, border: `1px solid ${c.borderLight}`, animationDelay: delay }}
+    >
+      {/* Thumbnail */}
+      <div style={{ aspectRatio: '16/9', ...fill }} />
+
+      {/* Body */}
+      <div className="flex flex-col gap-3 p-4 flex-1">
+        <div style={{ height: 13, width: '58%', ...fill }} />
+        <div className="flex gap-2">
+          <div style={{ height: 18, width: 60, ...fill }} />
+          <div style={{ height: 18, width: 52, ...fill }} />
+        </div>
+        <div
+          className="flex items-center justify-between pt-1 mt-auto"
+          style={{ borderTop: `1px solid ${c.borderLight}` }}
+        >
+          <div style={{ height: 10, width: 112, ...fill }} />
+          <div className="flex gap-3">
+            <div style={{ height: 12, width: 12, ...fill }} />
+            <div style={{ height: 12, width: 12, ...fill }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Copy, Pencil, Trash2, Check, ExternalLink } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Copy, Pencil, Trash2, Check, MoreHorizontal, ExternalLink, ChevronDown } from 'lucide-react'
 import { theme } from '../lib/theme'
 import MemberTag from './MemberTag'
 
@@ -24,46 +24,92 @@ function hashGradient(url) {
   } catch { return { a: '#e0e7ff', b: '#c7d2fe' } }
 }
 
-function isUsableHex(hex) {
-  const c = hex.replace('#', '')
-  if (c.length !== 6) return false
-  const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16)
-  const max = Math.max(r, g, b), min = Math.min(r, g, b)
-  const l = (max + min) / 510
-  const s = max === min ? 0 : (max - min) / (255 - Math.abs(max + min - 255))
-  return l > 0.08 && l < 0.92 && s > 0.18
-}
-
-export default function DeckCard({ deck, dark, cardView = 'thumbnail', onEdit, onDelete, onMemberClick }) {
+export default function DeckCard({ deck, members: allMembers = [], dark, onEdit, onDelete, onMemberClick }) {
   const c = theme(dark)
   const [copied, setCopied] = useState(false)
   const [hov, setHov] = useState(false)
-  const [imgErr, setImgErr] = useState(false)
-  const [brandColor, setBrandColor] = useState(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const viewUrl = `${BASE_URL}/view/${deck.slug}`
-  const members = [deck.member_one, deck.member_two].filter(Boolean)
+  const members = (deck.member_ids || []).map(id => allMembers.find(m => m.id === id)).filter(Boolean)
   const thumb = screenshotUrl(deck.deck_url)
   const fallback = hashGradient(deck.deck_url)
+  const gradientStyle = { background: `linear-gradient(135deg, ${fallback.a}, ${fallback.b})` }
+
+  // 'probing' → shimmer | 'ready' → show image | 'gradient' → color fallback
+  const [thumbState, setThumbState] = useState('probing')
+  const [imgSrc, setImgSrc] = useState(null)
+  const probeRef = useRef(null)
 
   useEffect(() => {
-    if (!deck.deck_url || cardView !== 'gradient') return
-    let cancelled = false
-    fetch(`https://api.microlink.io/?url=${encodeURIComponent(deck.deck_url)}&palette=true`)
-      .then(r => r.json())
-      .then(({ data }) => {
-        if (cancelled) return
-        const palette = data?.image?.palette ?? data?.logo?.palette ?? []
-        const color = palette.find(isUsableHex)
-        if (color) setBrandColor(color)
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [deck.deck_url, cardView])
+    if (!thumb) { setThumbState('gradient'); return }
+    let alive = true
 
-  const gradientStyle = brandColor
-    ? { background: `linear-gradient(135deg, ${brandColor}bb, ${brandColor})` }
-    : { background: `linear-gradient(135deg, ${fallback.a}, ${fallback.b})` }
+    function showImage(src) {
+      if (!alive) return
+      setImgSrc(src)
+      setThumbState('ready')
+    }
+
+    function probe(attempt = 0) {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      let settled = false
+
+      function settle(fn) {
+        if (settled || !alive) return
+        settled = true
+        clearTimeout(probeRef.current)
+        fn()
+      }
+
+      // Hard timeout — if the network hangs (e.g. sandbox), don't shimmer forever
+      probeRef.current = setTimeout(() => settle(() => showImage(thumb)), 5000)
+
+      img.onload = () => settle(() => {
+        try {
+          // Sample the centre 40% of the image into a 4×4 canvas
+          const canvas = document.createElement('canvas')
+          canvas.width = 4; canvas.height = 4
+          const ctx = canvas.getContext('2d')
+          const { naturalWidth: w, naturalHeight: h } = img
+          ctx.drawImage(img, w * 0.3, h * 0.3, w * 0.4, h * 0.4, 0, 0, 4, 4)
+          const d = ctx.getImageData(0, 0, 4, 4).data
+          let brightness = 0
+          for (let i = 0; i < d.length; i += 4) brightness += (d[i] + d[i + 1] + d[i + 2]) / 3
+          brightness /= 16
+
+          if (brightness < 60) {
+            // Near-black → WordPress "Generating Preview…" placeholder; retry
+            if (attempt < 8) {
+              const delay = Math.min(5000 * (attempt + 1), 20000)
+              probeRef.current = setTimeout(() => probe(attempt + 1), delay)
+            } else {
+              setThumbState('gradient') // gave up after max retries
+            }
+          } else {
+            // Real screenshot confirmed
+            showImage(attempt > 0 ? `${thumb}&_=${attempt}` : thumb)
+          }
+        } catch {
+          // canvas.getImageData blocked (CDN doesn't return CORS headers) —
+          // can't verify pixels, just show the image
+          showImage(thumb)
+        }
+      })
+
+      img.onerror = () => settle(() => {
+        // CORS denied immediately — server doesn't support it; show image directly
+        showImage(thumb)
+      })
+
+      img.src = attempt > 0 ? `${thumb}&_=${attempt}` : thumb
+    }
+
+    setThumbState('probing')
+    probe()
+    return () => { alive = false; clearTimeout(probeRef.current) }
+  }, [thumb])
 
   function copyLink() {
     navigator.clipboard.writeText(viewUrl).then(() => {
@@ -71,137 +117,113 @@ export default function DeckCard({ deck, dark, cardView = 'thumbnail', onEdit, o
     })
   }
 
-  if (cardView === 'gradient') {
-    return (
-      <div
-        className="flex flex-col transition-all"
-        style={{
-          background: c.bg,
-          border: `1px solid ${hov ? c.borderMid : c.border}`,
-          boxShadow: hov ? '0 4px 16px rgba(0,0,0,0.07)' : '0 1px 3px rgba(0,0,0,0.04)',
-          transition: 'border-color 0.15s, box-shadow 0.15s',
-        }}
-        onMouseEnter={() => setHov(true)}
-        onMouseLeave={() => setHov(false)}
-      >
-        <div className="flex flex-col gap-4 p-5">
-          {/* Top row: swatch + actions */}
-          <div className="flex items-start justify-between">
-            <div style={{ width: 52, height: 52, borderRadius: 10, flexShrink: 0, ...gradientStyle }} />
-            <div className={`flex items-center gap-0.5 transition-opacity ${hov ? 'opacity-100' : 'opacity-0'}`}>
-              <ActionBtn onClick={onEdit} title="Edit" hoverColor={c.text} bg={c.hoverBg}>
-                <Pencil size={12} />
-              </ActionBtn>
-              <ActionBtn onClick={onDelete} title="Delete" hoverColor="#dc2626" bg="rgba(220,38,38,0.08)">
-                <Trash2 size={12} />
-              </ActionBtn>
-            </div>
-          </div>
-
-          {/* Client name */}
-          <div>
-            <h3 className="text-xl font-bold leading-tight" style={{ color: c.text, letterSpacing: '-0.3px' }}>
-              {deck.client_name}
-            </h3>
-            {deck.deck_url && (
-              <p className="text-sm mt-1 truncate" style={{ color: c.muted }}>
-                {(() => { try { return new URL(deck.deck_url).hostname.replace('www.', '') } catch { return deck.deck_url } })()}
-              </p>
-            )}
-          </div>
-
-          {/* Members */}
-          {members.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              {members.map(m => (
-                <MemberTag key={m.id} member={m} dark={dark} onClick={() => onMemberClick(m)} />
-              ))}
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className="flex items-center justify-between pt-3 mt-auto" style={{ borderTop: `1px solid ${c.border}` }}>
-            <span className="text-xs font-mono uppercase tracking-wider" style={{ color: c.faint }}>
-              / {deck.slug} · {formatDate(deck.date_added)}
-            </span>
-            <div className="flex items-center gap-2">
-              <a href={deck.deck_url} target="_blank" rel="noreferrer" style={{ color: c.faint }}
-                onMouseEnter={e => e.currentTarget.style.color = c.text}
-                onMouseLeave={e => e.currentTarget.style.color = c.faint}>
-                <ExternalLink size={12} />
-              </a>
-              <button onClick={copyLink} className="flex items-center gap-1 text-xs transition-colors"
-                style={{ color: copied ? '#16a34a' : c.muted }}>
-                {copied ? <Check size={11} /> : <Copy size={11} />}
-                {copied ? 'Copied' : 'Copy'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Thumbnail view
   return (
     <div
-      className="flex flex-col transition-all overflow-hidden"
+      className="flex flex-col overflow-hidden"
       style={{
-        background: c.bg,
-        border: `1px solid ${hov ? c.borderMid : c.border}`,
+        background: c.card,
+        border: `1px solid ${c.border}`,
         boxShadow: hov ? '0 4px 16px rgba(0,0,0,0.07)' : '0 1px 3px rgba(0,0,0,0.04)',
-        transition: 'border-color 0.15s, box-shadow 0.15s',
+        transition: 'box-shadow 0.15s',
       }}
       onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
+      onMouseLeave={() => { setHov(false); setMenuOpen(false) }}
     >
+      {/* Thumbnail */}
       <div className="relative" style={{ aspectRatio: '16/9', overflow: 'hidden', background: c.surface }}>
-        {thumb && !imgErr ? (
-          <img
-            src={thumb}
-            alt={deck.client_name}
-            onError={() => setImgErr(true)}
-            className="w-full h-full object-cover object-top"
-          />
+        {thumbState === 'ready' ? (
+          <ThumbImage src={imgSrc} alt={deck.client_name} onFail={() => setThumbState('gradient')} />
+        ) : thumbState === 'probing' ? (
+          <div className="thumb-shimmer absolute inset-0" />
         ) : (
           <div className="w-full h-full" style={gradientStyle} />
         )}
+
+        {/* Hover overlay — stop propagation so card click doesn't fire */}
         <div className={`absolute top-2 right-2 flex gap-1 transition-opacity ${hov ? 'opacity-100' : 'opacity-0'}`}>
-          <ActionBtn onClick={onEdit} title="Edit" hoverColor={c.text}>
+          <OverlayBtn onClick={onEdit} title="Edit">
             <Pencil size={12} />
-          </ActionBtn>
-          <ActionBtn onClick={onDelete} title="Delete" hoverColor="#dc2626">
-            <Trash2 size={12} />
-          </ActionBtn>
+          </OverlayBtn>
+
+          <div style={{ position: 'relative' }}>
+            <OverlayBtn onClick={() => setMenuOpen(v => !v)} title="More" active={menuOpen}>
+              <MoreHorizontal size={12} />
+            </OverlayBtn>
+            {menuOpen && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setMenuOpen(false)} />
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 20,
+                  background: c.bg, border: `1px solid ${c.borderLight}`,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                  minWidth: 150, overflow: 'hidden',
+                }}>
+                  <PopoverItem
+                    icon={<Trash2 size={11} />}
+                    label="Delete"
+                    color="#dc2626"
+                    hoverBg={dark ? 'rgba(220,38,38,0.10)' : '#fef2f2'}
+                    onClick={() => { onDelete(); setMenuOpen(false) }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 p-4">
+      {/* Body */}
+      <div className="flex flex-col gap-3 p-4 flex-1">
         <h3 className="text-sm font-semibold leading-tight" style={{ color: c.text, letterSpacing: '-0.1px' }}>
           {deck.client_name}
         </h3>
-        {members.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            {members.map(m => (
-              <MemberTag key={m.id} member={m} dark={dark} onClick={() => onMemberClick(m)} />
-            ))}
-          </div>
-        )}
-        <div className="flex items-center justify-between pt-1" style={{ borderTop: `1px solid ${c.border}` }}>
+        <div className="flex items-center gap-2 flex-wrap">
+          {members.length > 0
+            ? members.map(m => <MemberTag key={m.id} member={m} dark={dark} onClick={() => onMemberClick(m)} />)
+            : <span className="text-sm" style={{ color: c.faint }}>—</span>
+          }
+        </div>
+        <div
+          className="flex items-center justify-between pt-1 mt-auto"
+          style={{ borderTop: `1px solid ${c.borderLight}` }}
+        >
           <span className="text-xs font-mono" style={{ color: c.faint }}>
             /{deck.slug} · {formatDate(deck.date_added)}
           </span>
-          <div className="flex items-center gap-2">
-            <a href={deck.deck_url} target="_blank" rel="noreferrer" style={{ color: c.faint }}
-              onMouseEnter={e => e.currentTarget.style.color = c.text}
-              onMouseLeave={e => e.currentTarget.style.color = c.faint}>
-              <ExternalLink size={12} />
-            </a>
-            <button onClick={copyLink} className="flex items-center gap-1 text-xs transition-colors"
-              style={{ color: copied ? '#16a34a' : c.muted }}>
-              {copied ? <Check size={11} /> : <Copy size={11} />}
-              {copied ? 'Copied' : 'Copy'}
-            </button>
+          <div className="flex items-center gap-3">
+            {/* Open deck */}
+            <div style={{ position: 'relative' }}>
+              {deck.alt_deck_url && (
+                <>
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 10, display: 'none' }} id={`lm-${deck.id}`} />
+                </>
+              )}
+              {deck.alt_deck_url ? (
+                <LinkDropdown deck={deck} c={c} />
+              ) : (
+                <a href={deck.deck_url} target="_blank" rel="noreferrer" title="Open deck"
+                  style={{ color: c.faint, display: 'flex' }}
+                  onMouseEnter={e => e.currentTarget.style.color = c.text}
+                  onMouseLeave={e => e.currentTarget.style.color = c.faint}>
+                  <ExternalLink size={13} />
+                </a>
+              )}
+            </div>
+            {/* Copy */}
+            {deck.alt_deck_url ? (
+              <CopyDropdown deck={deck} c={c} />
+            ) : (
+              <button
+                onClick={copyLink}
+                title={copied ? 'Copied!' : 'Copy link'}
+                className="flex transition-colors"
+                style={{ color: copied ? '#16a34a' : c.faint }}
+                onMouseEnter={e => { if (!copied) e.currentTarget.style.color = c.text }}
+                onMouseLeave={e => { if (!copied) e.currentTarget.style.color = c.faint }}
+              >
+                {copied ? <Check size={13} /> : <Copy size={13} />}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -209,25 +231,124 @@ export default function DeckCard({ deck, dark, cardView = 'thumbnail', onEdit, o
   )
 }
 
-function ActionBtn({ children, onClick, title, hoverColor, bg }) {
+function ThumbImage({ src, alt, onFail }) {
+  const [loaded, setLoaded] = useState(false)
+  return (
+    <>
+      {!loaded && <div className="thumb-shimmer absolute inset-0" />}
+      <img
+        src={src}
+        alt={alt}
+        onLoad={() => setLoaded(true)}
+        onError={onFail}
+        className="w-full h-full object-cover object-top"
+        style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.3s' }}
+      />
+    </>
+  )
+}
+
+function OverlayBtn({ children, onClick, title, active }) {
   const [hov, setHov] = useState(false)
-  const isOverlay = !bg
   return (
     <button
       onClick={onClick}
       title={title}
-      className="p-1.5 rounded-md transition-colors"
+      className="p-1.5 transition-colors"
       style={{
-        color: hov ? hoverColor : '#9ca3af',
-        background: isOverlay
-          ? (hov ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.75)')
-          : (hov ? (bg || 'transparent') : 'transparent'),
-        backdropFilter: isOverlay ? 'blur(4px)' : 'none',
+        color: hov || active ? '#000' : '#333',
+        background: hov || active ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.88)',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
       }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
     >
       {children}
+    </button>
+  )
+}
+
+function LinkDropdown({ deck, c }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ position: 'relative' }}>
+      {open && <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setOpen(false)} />}
+      <button
+        onClick={() => setOpen(v => !v)}
+        title="Open deck"
+        className="flex items-center gap-0.5 transition-colors"
+        style={{ color: open ? c.text : c.faint }}
+        onMouseEnter={e => e.currentTarget.style.color = c.text}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.color = c.faint }}>
+        <ExternalLink size={13} />
+        <ChevronDown size={8} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 6px)', right: 0, zIndex: 20,
+          background: c.bg, border: `1px solid ${c.borderLight}`,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          minWidth: 140, overflow: 'hidden',
+        }}>
+          <PopoverItem icon={<ExternalLink size={11} />} label="Deck URL" color={c.text} hoverBg={c.surface} onClick={() => { window.open(deck.deck_url, '_blank'); setOpen(false) }} />
+          <PopoverItem icon={<ExternalLink size={11} />} label="Alternative URL" color={c.text} hoverBg={c.surface} onClick={() => { window.open(deck.alt_deck_url, '_blank'); setOpen(false) }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CopyDropdown({ deck, c }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(null)
+
+  function copy(url, key) {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(key); setTimeout(() => setCopied(null), 1800)
+    })
+    setOpen(false)
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {open && <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setOpen(false)} />}
+      <button
+        onClick={() => setOpen(v => !v)}
+        title="Copy link"
+        className="flex items-center gap-0.5 transition-colors"
+        style={{ color: copied ? '#16a34a' : open ? c.text : c.faint }}
+        onMouseEnter={e => e.currentTarget.style.color = c.text}
+        onMouseLeave={e => { if (!open && !copied) e.currentTarget.style.color = c.faint }}
+      >
+        {copied ? <Check size={13} /> : <Copy size={13} />}
+        {!copied && <ChevronDown size={8} />}
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 6px)', right: 0, zIndex: 20,
+          background: c.bg, border: `1px solid ${c.borderLight}`,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          minWidth: 140, overflow: 'hidden',
+        }}>
+          <PopoverItem icon={<Copy size={11} />} label="Deck URL" color={c.text} hoverBg={c.surface} onClick={() => copy(deck.deck_url, 'deck')} />
+          <PopoverItem icon={<Copy size={11} />} label="Alternative URL" color={c.text} hoverBg={c.surface} onClick={() => copy(deck.alt_deck_url, 'alt')} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PopoverItem({ icon, label, color, hoverBg, onClick }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 w-full px-3 py-2.5 text-xs font-medium text-left transition-colors"
+      style={{ color, background: hov ? hoverBg : 'transparent' }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      {icon}{label}
     </button>
   )
 }

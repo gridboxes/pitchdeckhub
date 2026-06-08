@@ -4,6 +4,14 @@
 
 @layer base {
   * { box-sizing: border-box; }
+  button { cursor: pointer; }
+
+  html {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    overflow-x: hidden;
+  }
+  html::-webkit-scrollbar { display: none; }
 
   body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -22,7 +30,43 @@
   }
 }
 
+/* Color picker slider */
+.color-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+}
+.color-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+  border: 2px solid rgba(255,255,255,0.6);
+  transition: transform 0.15s;
+}
+.color-slider::-webkit-slider-thumb:active {
+  transform: scale(1.15);
+}
+.color-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+  border: 2px solid rgba(255,255,255,0.6);
+}
+.color-slider::-webkit-slider-runnable-track { background: transparent; }
+.color-slider::-moz-range-track { background: transparent; }
+
 /* Member circle patterns */
+
 .pattern-solid {}
 
 .pattern-dots {
@@ -42,4 +86,18 @@
     linear-gradient(rgba(0,0,0,0.18) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0,0,0,0.18) 1px, transparent 1px);
   background-size: 5px 5px;
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+.thumb-shimmer {
+  background: linear-gradient(90deg, #e8e8e8 25%, #f0f0f0 50%, #e8e8e8 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+.dark .thumb-shimmer {
+  background: linear-gradient(90deg, #222 25%, #2a2a2a 50%, #222 75%);
+  background-size: 800px 100%;
 }

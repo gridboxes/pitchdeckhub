@@ -9,18 +9,28 @@ export default function DeckModal({ deck, members: initialMembers, dark, onClose
 
   const [clientName, setClientName] = useState(deck?.client_name || '')
   const [slug, setSlug] = useState(deck?.slug || '')
+  const [slugTouched, setSlugTouched] = useState(!!deck?.slug)
   const [deckUrl, setDeckUrl] = useState(deck?.deck_url || '')
+  const [altDeckUrl, setAltDeckUrl] = useState(deck?.alt_deck_url || '')
+  const [showAltUrl, setShowAltUrl] = useState(!!deck?.alt_deck_url)
+
+  function autoSlug(name) {
+    return name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '')
+  }
+
+  function handleTitleChange(e) {
+    const name = e.target.value
+    setClientName(name)
+    if (!slugTouched) setSlug(autoSlug(name))
+  }
   const [selected, setSelected] = useState([])
   const [members, setMembers] = useState(initialMembers || [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (deck) {
-      const pre = []
-      if (deck.member_one) pre.push(deck.member_one)
-      if (deck.member_two) pre.push(deck.member_two)
-      setSelected(pre)
+    if (deck?.member_ids?.length) {
+      setSelected(members.filter(m => deck.member_ids.includes(m.id)))
     }
   }, [deck])
 
@@ -32,15 +42,23 @@ export default function DeckModal({ deck, members: initialMembers, dark, onClose
       client_name: clientName.trim(),
       slug: slug.trim().toUpperCase(),
       deck_url: deckUrl.trim(),
-      member_one_id: selected[0]?.id || null,
-      member_two_id: selected[1]?.id || null,
+      alt_deck_url: altDeckUrl.trim() || null,
+      member_ids: selected.map(m => m.id),
     }
-    const q = `*, member_one:member_one_id(*), member_two:member_two_id(*)`
+    const q = `*`
     const result = deck?.id
       ? await supabase.from('decks').update(payload).eq('id', deck.id).select(q).single()
       : await supabase.from('decks').insert(payload).select(q).single()
     setLoading(false)
-    if (result.error) { setError(result.error.message); return }
+    if (result.error) {
+      const msg = result.error.message || ''
+      if (msg.includes('decks_slug_key') || msg.includes('unique') && msg.includes('slug')) {
+        setError(`The slug "${payload.slug}" is already taken. Choose a different one.`)
+      } else {
+        setError(msg)
+      }
+      return
+    }
     onSaved(result.data)
     onClose()
   }
@@ -48,16 +66,14 @@ export default function DeckModal({ deck, members: initialMembers, dark, onClose
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={onClose} />
-      <div className="relative w-full max-w-md" style={{
+      <div className="relative w-full max-w-md overflow-y-auto max-h-[90vh]" style={{
         background: c.bg,
         border: `1px solid ${c.border}`,
         boxShadow: '0 24px 64px rgba(0,0,0,0.18)',
       }}>
 
-        {/* Accent rule at top */}
         <div style={{ height: 3, background: c.accent }} />
 
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${c.borderLight}` }}>
           <h2 className="font-display text-base font-bold tracking-tight" style={{ color: c.text }}>
             {deck ? 'Edit deck' : 'Add deck'}
@@ -73,19 +89,33 @@ export default function DeckModal({ deck, members: initialMembers, dark, onClose
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
-          <Field label="Client name" c={c}>
-            <FocusInput type="text" value={clientName} onChange={e => setClientName(e.target.value)} required placeholder="Bangkok Condo Co." c={c} />
+          <Field label="Deck title" c={c}>
+            <FocusInput type="text" value={clientName} onChange={handleTitleChange} required placeholder="" c={c} />
           </Field>
 
-          <Field label="Slug" c={c} hint="Uppercase letters, numbers, hyphens only">
-            <SlugInput value={slug} onChange={e => setSlug(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))} c={c} />
+          <Field label="Slug" c={c} hint="Uppercase letters, numbers, hyphens, underscores only">
+            <SlugInput value={slug} onChange={e => { setSlugTouched(true); setSlug(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '')) }} c={c} />
           </Field>
 
           <Field label="Deck URL" c={c}>
-            <FocusInput type="url" value={deckUrl} onChange={e => setDeckUrl(e.target.value)} required placeholder="https://pitch.com/…" c={c} />
+            <FocusInput type="url" value={deckUrl} onChange={e => setDeckUrl(e.target.value)} required placeholder="" c={c} />
           </Field>
+
+          {showAltUrl ? (
+            <Field label="Alternative URL" c={c}>
+              <FocusInput type="url" value={altDeckUrl} onChange={e => setAltDeckUrl(e.target.value)} placeholder="" c={c} />
+            </Field>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAltUrl(true)}
+              className="text-xs font-medium flex items-center gap-1 transition-opacity hover:opacity-60"
+              style={{ color: c.muted }}
+            >
+              <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> Add alternative URL
+            </button>
+          )}
 
           <Field label="Crafted by" c={c}>
             <MemberSelector members={members} selected={selected} onChange={setSelected} onMembersChange={setMembers} dark={dark} />
@@ -162,7 +192,7 @@ function SlugInput({ value, onChange, c }) {
         value={value}
         onChange={onChange}
         required
-        placeholder="BCC"
+        placeholder=""
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         className="flex-1 px-3 py-2 text-sm outline-none"
