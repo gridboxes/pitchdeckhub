@@ -357,12 +357,33 @@ function MobileActionBtn({ href, onClick, title, children, btnRef, wide }) {
     : <button ref={btnRef} onClick={e => { e.stopPropagation(); onClick(e) }} title={title} className={className} style={style}>{children}</button>
 }
 
+// Closes an open menu on a click/tap outside both the trigger and the menu
+// itself. Deliberately a passive document listener rather than a full-screen
+// catcher overlay — a catcher would sit on top of *other* trigger buttons and
+// swallow the click meant to switch to them, forcing a second click to open.
+function useCloseOnOutside(active, refs, onClose) {
+  useEffect(() => {
+    if (!active) return
+    function handler(e) {
+      for (const ref of refs) if (ref.current?.contains(e.target)) return
+      onClose()
+    }
+    document.addEventListener('mousedown', handler)
+    document.addEventListener('touchstart', handler)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('touchstart', handler)
+    }
+  }, [active])
+}
+
 // Tap-to-open variants of the alt-URL pickers for touch devices — FloatingMenu
-// is reused for positioning, with a full-screen tap-catcher to dismiss (the
-// hover-driven desktop version has no equivalent "tap outside to close").
+// is reused for positioning; closing happens on outside tap (see useCloseOnOutside).
 function MobileLinkDropdown({ deck, c }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef(null)
+  const menuRef = useRef(null)
+  useCloseOnOutside(open, [triggerRef, menuRef], () => setOpen(false))
 
   return (
     <>
@@ -370,11 +391,7 @@ function MobileLinkDropdown({ deck, c }) {
         <ExternalLink size={13} />
         <ChevronDown size={10} />
       </MobileActionBtn>
-      {open && createPortal(
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100 }} onClick={() => setOpen(false)} />,
-        document.body
-      )}
-      <FloatingMenu triggerRef={triggerRef} open={open} c={c}>
+      <FloatingMenu triggerRef={triggerRef} menuRef={menuRef} open={open} c={c}>
         <PopoverItem icon={<ExternalLink size={11} />} label="Deck URL" color={c.text} hoverBg={c.surface} onClick={() => { window.open(deck.deck_url, '_blank'); setOpen(false) }} />
         <PopoverItem icon={<ExternalLink size={11} />} label="Alternative URL" color={c.text} hoverBg={c.surface} onClick={() => { window.open(deck.alt_deck_url, '_blank'); setOpen(false) }} />
       </FloatingMenu>
@@ -386,6 +403,8 @@ function MobileCopyDropdown({ deck, c }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(null)
   const triggerRef = useRef(null)
+  const menuRef = useRef(null)
+  useCloseOnOutside(open, [triggerRef, menuRef], () => setOpen(false))
 
   function copy(url, key) {
     navigator.clipboard.writeText(url).then(() => {
@@ -400,11 +419,7 @@ function MobileCopyDropdown({ deck, c }) {
         {copied ? <Check size={13} /> : <Copy size={13} />}
         {!copied && <ChevronDown size={10} />}
       </MobileActionBtn>
-      {open && createPortal(
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100 }} onClick={() => setOpen(false)} />,
-        document.body
-      )}
-      <FloatingMenu triggerRef={triggerRef} open={open} c={c}>
+      <FloatingMenu triggerRef={triggerRef} menuRef={menuRef} open={open} c={c}>
         <PopoverItem icon={<Copy size={11} />} label="Deck URL" color={c.text} hoverBg={c.surface} onClick={() => copy(deck.deck_url, 'deck')} />
         <PopoverItem icon={<Copy size={11} />} label="Alternative URL" color={c.text} hoverBg={c.surface} onClick={() => copy(deck.alt_deck_url, 'alt')} />
       </FloatingMenu>
@@ -415,7 +430,7 @@ function MobileCopyDropdown({ deck, c }) {
 // Renders the popover in a portal positioned by the trigger's screen rect, so it
 // opens downward without being clipped by the thumbnail's `overflow: hidden` or
 // covered by the card's title/body underneath.
-function FloatingMenu({ triggerRef, open, c, children, onMouseEnter, onMouseLeave }) {
+function FloatingMenu({ triggerRef, menuRef, open, c, children, onMouseEnter, onMouseLeave }) {
   const [pos, setPos] = useState(null)
 
   const MIN_WIDTH = 150
@@ -445,6 +460,7 @@ function FloatingMenu({ triggerRef, open, c, children, onMouseEnter, onMouseLeav
 
   return createPortal(
     <div
+      ref={menuRef}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={{
@@ -459,67 +475,61 @@ function FloatingMenu({ triggerRef, open, c, children, onMouseEnter, onMouseLeav
   )
 }
 
-// Opens on hover (with a short close delay so the cursor can travel from the
-// trigger button down to the menu without it disappearing mid-trip). `active`/
-// `setActive` are lifted to the card so only one dropdown is open at a time —
-// they sit close enough that an open menu can spill over its neighbor's trigger.
-function useHoverOpen(hov, active, setActive) {
-  const closeTimer = useRef(null)
-
+// Click-to-toggle dropdowns. `active`/`setActive` are lifted to the card so
+// only one is open at a time (they sit close enough that an open menu can
+// spill over its neighbor's trigger). Closes when the cursor leaves the card,
+// or on outside click (see useCloseOnOutside).
+function useClickOpen(hov, active, setActive, triggerRef, menuRef) {
   useEffect(() => { if (!hov && active) setActive(false) }, [hov])
-  useEffect(() => () => clearTimeout(closeTimer.current), [])
+  useCloseOnOutside(active, [triggerRef, menuRef], () => setActive(false))
 
-  function openNow() {
-    clearTimeout(closeTimer.current)
-    setActive(true)
-  }
-  function closeSoon() {
-    clearTimeout(closeTimer.current)
-    closeTimer.current = setTimeout(() => setActive(false), 200)
-  }
+  function toggle() { setActive(!active) }
+  function close() { setActive(false) }
 
-  return [openNow, closeSoon]
+  return [toggle, close]
 }
 
 function CenterLinkDropdown({ deck, c, hov, active, setActive }) {
-  const [openNow, closeSoon] = useHoverOpen(hov, active, setActive)
   const triggerRef = useRef(null)
+  const menuRef = useRef(null)
+  const [toggle, close] = useClickOpen(hov, active, setActive, triggerRef, menuRef)
 
   return (
-    <div style={{ display: 'inline-flex' }} onMouseEnter={openNow} onMouseLeave={closeSoon}>
-      <CenterActionBtn btnRef={triggerRef} title="Open deck">
+    <div style={{ display: 'inline-flex' }}>
+      <CenterActionBtn btnRef={triggerRef} onClick={toggle} title="Open deck">
         <ExternalLink size={15} />
         Open
         <ChevronDown size={11} />
       </CenterActionBtn>
-      <FloatingMenu triggerRef={triggerRef} open={active} c={c} onMouseEnter={openNow} onMouseLeave={closeSoon}>
-        <PopoverItem icon={<ExternalLink size={11} />} label="Deck URL" color={c.text} hoverBg={c.surface} onClick={() => { window.open(deck.deck_url, '_blank'); setActive(false) }} />
-        <PopoverItem icon={<ExternalLink size={11} />} label="Alternative URL" color={c.text} hoverBg={c.surface} onClick={() => { window.open(deck.alt_deck_url, '_blank'); setActive(false) }} />
+      <FloatingMenu triggerRef={triggerRef} menuRef={menuRef} open={active} c={c}>
+        <PopoverItem icon={<ExternalLink size={11} />} label="Deck URL" color={c.text} hoverBg={c.surface} onClick={() => { window.open(deck.deck_url, '_blank'); close() }} />
+        <PopoverItem icon={<ExternalLink size={11} />} label="Alternative URL" color={c.text} hoverBg={c.surface} onClick={() => { window.open(deck.alt_deck_url, '_blank'); close() }} />
       </FloatingMenu>
     </div>
   )
 }
 
 function CenterCopyDropdown({ deck, c, hov, active, setActive }) {
-  const [openNow, closeSoon] = useHoverOpen(hov, active, setActive)
-  const [copied, setCopied] = useState(null)
   const triggerRef = useRef(null)
+  const menuRef = useRef(null)
+  const [toggle, close] = useClickOpen(hov, active, setActive, triggerRef, menuRef)
+  const [copied, setCopied] = useState(null)
 
   function copy(url, key) {
     navigator.clipboard.writeText(url).then(() => {
       setCopied(key); setTimeout(() => setCopied(null), 1800)
     })
-    setActive(false)
+    close()
   }
 
   return (
-    <div style={{ display: 'inline-flex' }} onMouseEnter={openNow} onMouseLeave={closeSoon}>
-      <CenterActionBtn btnRef={triggerRef} title="Copy link">
+    <div style={{ display: 'inline-flex' }}>
+      <CenterActionBtn btnRef={triggerRef} onClick={toggle} title="Copy link">
         {copied ? <Check size={15} /> : <Copy size={15} />}
         {copied ? 'Copied' : 'Copy link'}
         {!copied && <ChevronDown size={11} />}
       </CenterActionBtn>
-      <FloatingMenu triggerRef={triggerRef} open={active} c={c} onMouseEnter={openNow} onMouseLeave={closeSoon}>
+      <FloatingMenu triggerRef={triggerRef} menuRef={menuRef} open={active} c={c}>
         <PopoverItem icon={<Copy size={11} />} label="Deck URL" color={c.text} hoverBg={c.surface} onClick={() => copy(deck.deck_url, 'deck')} />
         <PopoverItem icon={<Copy size={11} />} label="Alternative URL" color={c.text} hoverBg={c.surface} onClick={() => copy(deck.alt_deck_url, 'alt')} />
       </FloatingMenu>
