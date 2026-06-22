@@ -1,6 +1,6 @@
 import { useState, useRef, useId } from 'react'
 import { Sparkles, Sun, Moon } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { createMember, updateMember } from '../lib/mockDb'
 import { theme } from '../lib/theme'
 import { parseColor, serializeColor, gradientCss, hslToHex, hexToHsl, clamp } from '../lib/memberColor'
 
@@ -153,8 +153,8 @@ export default function MemberForm({ initial = {}, onSave, onCancel, dark = fals
     setLoading(true)
     const payload = { name: name.trim(), color: savedValue, pattern: 'solid', pin: initial.pin || '0000' }
     const result = initial.id
-      ? await supabase.from('members').update(payload).eq('id', initial.id).select().single()
-      : await supabase.from('members').insert(payload).select().single()
+      ? await updateMember(initial.id, payload)
+      : await createMember(payload)
     setLoading(false)
     if (result.error) { console.error(result.error); return }
     onSave(result.data)

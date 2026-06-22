@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, LogOut, Sun, Moon, Users } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { mockAuth } from '../lib/mockAuth'
+import { listDecks, listMembers, deleteDeckById, removeMemberFromDecks, deleteMemberById } from '../lib/mockDb'
 import { useTheme } from '../context/ThemeContext'
 import { theme } from '../lib/theme'
 import DeckCard from '../components/DeckCard'
@@ -32,17 +33,14 @@ export default function Dashboard() {
 
   async function fetchAll() {
     setLoadingDecks(true)
-    const [deckRes, memberRes] = await Promise.all([
-      supabase.from('decks').select('*').order('date_added', { ascending: false }),
-      supabase.from('members').select('*').order('name'),
-    ])
-    if (deckRes.data) setDecks(deckRes.data)
-    if (memberRes.data) setMembers(memberRes.data)
+    const [deckData, memberData] = await Promise.all([listDecks(), listMembers()])
+    setDecks(deckData)
+    setMembers(memberData)
     setLoadingDecks(false)
   }
 
   async function handleLogout() {
-    await supabase.auth.signOut()
+    await mockAuth.signOut()
     setShowLogout(false)
   }
 
@@ -57,7 +55,7 @@ export default function Dashboard() {
   async function handleDelete() {
     if (!deleteDeck) return
     setDeleteLoading(true)
-    await supabase.from('decks').delete().eq('id', deleteDeck.id)
+    await deleteDeckById(deleteDeck.id)
     setDecks(prev => prev.filter(d => d.id !== deleteDeck.id))
     setDeleteLoading(false)
     setDeleteDeck(null)
@@ -77,10 +75,8 @@ export default function Dashboard() {
     if (!deleteMember) return
     setDeleteMemberLoading(true)
 
-    await Promise.all(affectedDecks.map(d =>
-      supabase.from('decks').update({ member_ids: d.member_ids.filter(id => id !== deleteMember.id) }).eq('id', d.id)
-    ))
-    await supabase.from('members').delete().eq('id', deleteMember.id)
+    await removeMemberFromDecks(deleteMember.id, affectedDecks.map(d => d.id))
+    await deleteMemberById(deleteMember.id)
 
     setDecks(prev => prev.map(d =>
       affectedDecks.find(ad => ad.id === d.id)

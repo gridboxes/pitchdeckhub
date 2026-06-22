@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { getDeckBySlug } from '../lib/mockDb'
 import { useTheme } from '../context/ThemeContext'
 import { theme } from '../lib/theme'
 
@@ -12,18 +12,14 @@ export default function ViewSlug() {
 
   useEffect(() => {
     async function redirect() {
-      const { data, error } = await supabase
-        .from('decks')
-        .select('deck_url')
-        .eq('slug', slug)
-        .single()
+      const deck = await getDeckBySlug(slug)
 
-      if (error || !data) {
+      if (!deck) {
         setNotFound(true)
         return
       }
 
-      window.location.replace(data.deck_url)
+      window.location.replace(deck.deck_url)
     }
 
     redirect()

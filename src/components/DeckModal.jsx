@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { createDeck, updateDeck } from '../lib/mockDb'
 import { theme } from '../lib/theme'
 import MemberSelector from './MemberSelector'
 
@@ -45,10 +45,9 @@ export default function DeckModal({ deck, members: initialMembers, dark, onClose
       alt_deck_url: altDeckUrl.trim() || null,
       member_ids: selected.map(m => m.id),
     }
-    const q = `*`
     const result = deck?.id
-      ? await supabase.from('decks').update(payload).eq('id', deck.id).select(q).single()
-      : await supabase.from('decks').insert(payload).select(q).single()
+      ? await updateDeck(deck.id, payload)
+      : await createDeck(payload)
     setLoading(false)
     if (result.error) {
       const msg = result.error.message || ''

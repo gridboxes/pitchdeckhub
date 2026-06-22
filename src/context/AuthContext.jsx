@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { mockAuth } from '../lib/mockAuth'
 
 const AuthContext = createContext(null)
 
@@ -7,12 +7,9 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined)
 
   useEffect(() => {
-    const timeout = new Promise(resolve => setTimeout(() => resolve({ data: { session: null } }), 3000))
-    Promise.race([supabase.auth.getSession(), timeout])
-      .then(({ data }) => setSession(data.session))
-      .catch(() => setSession(null))
+    mockAuth.getSession().then(({ data }) => setSession(data.session))
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = mockAuth.onAuthStateChange(session => {
       setSession(session)
     })
 

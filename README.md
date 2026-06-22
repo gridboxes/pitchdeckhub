@@ -1,6 +1,8 @@
-# Mtel Pitch
+# Mtel Pitch (Demo)
 
 Internal dashboard for managing client pitch deck links. One shared team login; clients receive a direct `/view/:slug` URL.
+
+This is a **portfolio demo build** — it runs entirely on in-memory mock data instead of a real backend. Sign in with any email/password, add decks and members freely, and explore the full flow. Nothing is persisted: a page refresh resets everything back to the seeded sample data.
 
 ---
 
@@ -8,9 +10,9 @@ Internal dashboard for managing client pitch deck links. One shared team login; 
 
 - React 19 + Vite
 - Tailwind CSS v4
-- Supabase (Auth + Database)
 - React Router v7
 - Lucide React icons
+- Mock data layer (`src/lib/mockAuth.js`, `src/lib/mockDb.js`) standing in for an auth/database backend
 
 ---
 
@@ -24,84 +26,30 @@ cd mtel-pitchdeck
 npm install
 ```
 
-### 2. Create a Supabase project
-
-Go to [supabase.com](https://supabase.com), create a new project, then run the SQL below in the **SQL Editor**.
-
-### 3. Create the database tables
-
-```sql
--- Members table
-create table members (
-  id      uuid primary key default gen_random_uuid(),
-  name    text not null,
-  color   text not null,
-  pattern text not null,
-  pin     text not null
-);
-
--- Decks table
-create table decks (
-  id            uuid primary key default gen_random_uuid(),
-  client_name   text not null,
-  slug          text not null unique,
-  deck_url      text not null,
-  date_added    timestamptz not null default now(),
-  member_one_id uuid references members(id) on delete set null,
-  member_two_id uuid references members(id) on delete set null
-);
-```
-
-### 4. Enable Row Level Security (optional but recommended)
-
-```sql
--- Allow authenticated users to do everything
-alter table decks  enable row level security;
-alter table members enable row level security;
-
-create policy "Authenticated full access" on decks
-  for all using (auth.role() = 'authenticated');
-
-create policy "Authenticated full access" on members
-  for all using (auth.role() = 'authenticated');
-
--- Allow public read on decks (for /view/:slug)
-create policy "Public read decks" on decks
-  for select using (true);
-```
-
-### 5. Create the shared team user
-
-In Supabase → **Authentication → Users**, click **Add user** and create the shared team email/password.
-
-### 6. Configure environment variables
-
-```bash
-cp .env.example .env
-```
-
-Fill in your values from **Supabase → Project Settings → API**:
-
-```
-VITE_SUPABASE_URL=https://xxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJ...
-```
-
-Optionally set `VITE_APP_URL` to your deployed domain (e.g. `https://pitch.mtel.com`) so the "Copy link" button generates the correct URL.
-
-### 7. Run locally
+### 2. Run locally
 
 ```bash
 npm run dev
 ```
 
-### 8. Build for production
+### 3. Build for production
 
 ```bash
 npm run build
 ```
 
 Deploy the `dist/` folder to Vercel, Netlify, or any static host.
+
+---
+
+## Mock data
+
+- `src/lib/mockAuth.js` simulates the auth session — any non-empty email/password signs you in, kept only in memory.
+- `src/lib/mockDb.js` seeds a handful of sample decks and members, and implements create/update/delete in-memory.
+
+To swap this demo back onto a real backend, replace the calls in those two files with your API/database client of choice; the rest of the app is unaware of where the data comes from.
+
+Optionally set `VITE_APP_URL` (see `.env.example`) to your deployed domain so the "Copy link" button generates the correct URL.
 
 ---
 
