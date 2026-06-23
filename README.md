@@ -1,8 +1,8 @@
-# Mtel Pitch (Demo)
+# Pitch (Demo)
 
 Internal dashboard for managing client pitch deck links. One shared team login; clients receive a direct `/view/:slug` URL.
 
-This is a **portfolio demo build** — it runs entirely on in-memory mock data instead of a real backend. Sign in with any email/password, add decks and members freely, and explore the full flow. Nothing is persisted: a page refresh resets everything back to the seeded sample data.
+This is a **portfolio demo build** — it runs entirely on in-memory mock data instead of a real backend. Credentials are prefilled on the login screen, so just hit sign in. Add decks and members freely and explore the full flow — your session survives a refresh, but the decks/members data resets back to the seeded sample data (nothing is persisted to a database).
 
 ---
 
@@ -22,7 +22,7 @@ This is a **portfolio demo build** — it runs entirely on in-memory mock data i
 
 ```bash
 git clone <repo>
-cd mtel-pitchdeck
+cd pitchdeckhub
 npm install
 ```
 

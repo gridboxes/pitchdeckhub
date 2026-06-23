@@ -95,7 +95,7 @@ export default function Dashboard() {
       <header style={{ background: c.bg, borderBottom: `1px solid ${c.border}` }}>
         <div className="max-w-5xl mx-auto px-8 h-14 flex items-center justify-between">
           <span className="font-display text-base font-bold tracking-tight" style={{ color: c.text }}>
-            Mtel Pitch
+            Pitch <span style={{ color: c.muted }}>(Demo)</span>
           </span>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-3">

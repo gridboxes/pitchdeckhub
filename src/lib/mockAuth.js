@@ -1,7 +1,27 @@
-// Stand-in for a real auth backend. Session lives only in memory, so a page
-// refresh always lands back on the login screen — there's nothing to persist.
+// Stand-in for a real auth backend. The session itself persists across a
+// refresh (via sessionStorage) so the dashboard doesn't kick you back to
+// login — only explicit sign-out clears it. Decks/members still reset on
+// refresh since those live in mockDb.js's in-memory store.
 
-let session = null
+const STORAGE_KEY = 'mock-auth-session'
+
+function readSession() {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function writeSession(value) {
+  try {
+    if (value) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value))
+    else sessionStorage.removeItem(STORAGE_KEY)
+  } catch {}
+}
+
+let session = readSession()
 const listeners = new Set()
 
 function notify() {
@@ -28,6 +48,7 @@ export const mockAuth = {
       return { error: { message: 'Enter any email and password to continue.' } }
     }
     session = { user: { email } }
+    writeSession(session)
     notify()
     return { error: null }
   },
@@ -35,6 +56,7 @@ export const mockAuth = {
   async signOut() {
     await delay(150)
     session = null
+    writeSession(null)
     notify()
     return { error: null }
   },

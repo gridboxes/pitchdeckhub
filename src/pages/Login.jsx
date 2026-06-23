@@ -3,8 +3,8 @@ import { Eye, EyeOff } from 'lucide-react'
 import { mockAuth } from '../lib/mockAuth'
 
 export default function Login() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('demo@pitch.app')
+  const [password, setPassword] = useState('demo1234')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -24,9 +24,11 @@ export default function Login() {
 
         <div style={{ width: 40, height: 3, background: '#F6C347', marginBottom: 28 }} />
 
-        <h1 className="font-display text-2xl font-bold tracking-tight mb-1" style={{ color: '#000000' }}>Mtel Pitch</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight mb-1" style={{ color: '#000000' }}>
+          Pitch <span style={{ color: '#999999' }}>(Demo)</span>
+        </h1>
         <p className="text-sm mb-2" style={{ color: '#888888' }}>Sign in to your workspace</p>
-        <p className="text-xs mb-10" style={{ color: '#aaaaaa' }}>Demo — enter any email and password to continue.</p>
+        <p className="text-xs mb-10" style={{ color: '#aaaaaa' }}>Demo — credentials are prefilled, just hit sign in.</p>
 
         <form onSubmit={handleSubmit} className="space-y-7">
           <div>
@@ -36,7 +38,7 @@ export default function Login() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              placeholder="team@mtel.com"
+              placeholder="team@pitch.app"
               className="w-full py-2 text-sm outline-none transition-all"
               style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #000', color: '#000', fontFamily: 'inherit' }}
               onFocus={e => e.target.style.borderBottomColor = '#F6C347'}

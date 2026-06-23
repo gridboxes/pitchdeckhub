@@ -1,4 +1,4 @@
-# Mtel Pitch Design System
+# Pitch Design System
 
 ## Direction
 
@@ -14,8 +14,8 @@ This file describes the design system actually implemented in the app. It is mea
 
 ## Source Of Truth
 
-- Theme tokens and shared utility classes live in [src/index.css](/Users/baby/Desktop/mtel-pitchdeck/src/index.css)
-- Reusable primitives live in [src/components/ui](/Users/baby/Desktop/mtel-pitchdeck/src/components/ui)
+- Theme tokens and shared utility classes live in [src/index.css](src/index.css)
+- Reusable primitives live in [src/components/ui](src/components/ui)
 
 ## Tokens
 
@@ -77,7 +77,7 @@ Light theme:
 
 ### Button
 
-File: [src/components/ui/Button.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/components/ui/Button.jsx)
+File: [src/components/ui/Button.jsx](src/components/ui/Button.jsx)
 
 Variants:
 
@@ -87,13 +87,13 @@ Variants:
 
 ### IconButton
 
-File: [src/components/ui/IconButton.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/components/ui/IconButton.jsx)
+File: [src/components/ui/IconButton.jsx](src/components/ui/IconButton.jsx)
 
 Use for header actions, card actions, close controls, and compact utilities.
 
 ### Input
 
-File: [src/components/ui/Input.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/components/ui/Input.jsx)
+File: [src/components/ui/Input.jsx](src/components/ui/Input.jsx)
 
 Rules:
 
@@ -103,7 +103,7 @@ Rules:
 
 ### SurfaceCard
 
-File: [src/components/ui/SurfaceCard.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/components/ui/SurfaceCard.jsx)
+File: [src/components/ui/SurfaceCard.jsx](src/components/ui/SurfaceCard.jsx)
 
 Use for:
 
@@ -113,7 +113,7 @@ Use for:
 
 ### ModalShell
 
-File: [src/components/ui/ModalShell.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/components/ui/ModalShell.jsx)
+File: [src/components/ui/ModalShell.jsx](src/components/ui/ModalShell.jsx)
 
 Use for all dialog surfaces so headers, spacing, blur, and shadows stay consistent.
 
@@ -155,15 +155,15 @@ Use for all dialog surfaces so headers, spacing, blur, and shadows stay consiste
 
 The current system is implemented across:
 
-- [src/pages/Login.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/pages/Login.jsx)
-- [src/pages/Dashboard.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/pages/Dashboard.jsx)
-- [src/pages/ViewSlug.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/pages/ViewSlug.jsx)
-- [src/components/DeckCard.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/components/DeckCard.jsx)
-- [src/components/DeckModal.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/components/DeckModal.jsx)
-- [src/components/DeleteDialog.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/components/DeleteDialog.jsx)
-- [src/components/EditMemberModal.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/components/EditMemberModal.jsx)
-- [src/components/MemberForm.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/components/MemberForm.jsx)
-- [src/components/MemberSelector.jsx](/Users/baby/Desktop/mtel-pitchdeck/src/components/MemberSelector.jsx)
+- [src/pages/Login.jsx](src/pages/Login.jsx)
+- [src/pages/Dashboard.jsx](src/pages/Dashboard.jsx)
+- [src/pages/ViewSlug.jsx](src/pages/ViewSlug.jsx)
+- [src/components/DeckCard.jsx](src/components/DeckCard.jsx)
+- [src/components/DeckModal.jsx](src/components/DeckModal.jsx)
+- [src/components/DeleteDialog.jsx](src/components/DeleteDialog.jsx)
+- [src/components/EditMemberModal.jsx](src/components/EditMemberModal.jsx)
+- [src/components/MemberForm.jsx](src/components/MemberForm.jsx)
+- [src/components/MemberSelector.jsx](src/components/MemberSelector.jsx)
 
 ## Next Steps
 
